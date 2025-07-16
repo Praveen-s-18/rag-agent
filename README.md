@@ -1,44 +1,62 @@
-# 🔧 Gemini RAG - Tool-Calling Q&A on PDF
+# 🤖 Gemini RAG PDF Q&A (Tool Calling)
 
-This project demonstrates a **Retrieval-Augmented Generation (RAG)** pipeline powered by **Google Gemini**, built using **LangChain tools**, **FAISS vector search**, and a **Streamlit UI**.
+![App Screenshot](assets/demo.png)
 
-You can upload a PDF, and the app will extract, chunk, embed, and retrieve relevant sections to answer your questions using Gemini.
-
----
-
-## 📌 Features
-
-- 📄 Upload PDF documents
-- ✂️ Chunk and embed text using Sentence Transformers
-- 🔍 Vector-based semantic search with FAISS
-- 💬 Question-answering via Google Gemini (`gemini-pro`)
-- 🧠 Modular, tool-based design using LangChain's `@tool` decorator
-- ⚡ Interactive frontend using Streamlit
+A **Retrieval-Augmented Generation (RAG)** application using **Google's Gemini** model to answer questions from uploaded PDFs. Built with **LangChain Tools**, **FAISS**, **SentenceTransformers**, and **Streamlit**, this project showcases a full RAG pipeline integrated with Gemini via tool-calling style.
 
 ---
 
-## 🧠 What is RAG?
+## 🚀 Features
 
-**Retrieval-Augmented Generation (RAG)** is a technique that improves LLM responses by retrieving relevant information from external documents and feeding it into the model as context.
+- 📄 Upload any PDF
+- 🧩 Automatically splits and chunks text
+- 🧠 Embeds chunks using MiniLM and stores in FAISS index
+- 🔍 Retrieves top-k relevant chunks based on your query
+- 💬 Uses **Gemini Pro** to generate answers based on retrieved context
 
-Instead of relying on the model’s internal memory alone, it dynamically pulls relevant content to generate more accurate, grounded answers.
+---
+
+## 📸 Demo
+
+> ![Preview](assets/demo.png)  
+> *Above: Screenshot of the app answering a question based on a PDF.*
 
 ---
 
 ## 🛠️ How It Works
 
-1. **PDF Upload** – Load your document.
-2. **Text Chunking** – Break it into manageable segments.
-3. **Embedding** – Convert text into vector representations.
-4. **Semantic Search** – Match your question to the most relevant chunks.
-5. **Gemini Q&A** – Provide the context to Gemini and get a natural language response.
+### 1. **Load PDF**
+Uses `PyPDFLoader` to extract content.
+
+### 2. **Chunking**
+Splits the content using `RecursiveCharacterTextSplitter`.
+
+### 3. **Embedding**
+Generates embeddings using `sentence-transformers/all-MiniLM-L6-v2`.
+
+### 4. **Vector Store**
+Stores embeddings in a `FAISS` index for efficient retrieval.
+
+### 5. **Query + Gemini Answering**
+Top chunks are retrieved and passed into **Gemini Pro** to generate answers.
 
 ---
 
-## 🚀 Getting Started
+## 🔧 Tech Stack
 
-### 1. Clone the Repository
+- [LangChain](https://www.langchain.com/)
+- [Gemini API (Google Generative AI)](https://ai.google.dev/)
+- [Streamlit](https://streamlit.io/)
+- [FAISS](https://github.com/facebookresearch/faiss)
+- [Sentence Transformers](https://www.sbert.net/)
+- Python 3.10+
+
+---
+
+## 📦 Setup Instructions
+
+### 1. Clone this Repo
 
 ```bash
-git clone https://github.com/yourusername/gemini-rag-pdf.git
-cd gemini-rag-pdf
+git clone https://github.com/your-username/your-repo-name.git
+cd your-repo-name

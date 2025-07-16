@@ -1,167 +1,122 @@
 import os
 import google.generativeai as genai
-from pinecone import Pinecone
-
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Pinecone as LangchainPinecone
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
+import streamlit as st
+# from langchain.tools import tool  # No longer needed
 
-# ==== STEP 1: Set your API Keys and Host ====
-os.environ["GOOGLE_API_KEY"] = "AIzaSyB0YmJ6rP_dxkBamxq_ueMwGoppIFW7A2U"
-os.environ["PINECONE_API_KEY"] = "pcsk_4aAC2L_5zgaeGk1wbn6cmDYbdtJSA3M4vnbTFNmhAMSmPQM7F365RRQw6uVBnnhFfahcNm"
-PINECONE_HOST = "https://rag-p0g64lw.svc.aped-4627-b74a.pinecone.io"
-PINECONE_INDEX_NAME = "rag"
-PINECONE_NAMESPACE = "nips2017"
+# 📌 Set Gemini API key here
+GEMINI_API_KEY = "AIzaSyDR938WLM0_Ni5QRWB6xx2NrFoNH4rJa3I"  # Replace with your actual key
+os.environ["GOOGLE_API_KEY"] = GEMINI_API_KEY
+genai.configure(api_key=GEMINI_API_KEY)
 
-# ==== STEP 2: Initialize Gemini ====
-genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+# 🧠 Memory store
+memory = {}
 
-# ==== RAG System Class ====
-class SimpleRAGSystem:
-    def __init__(self):
-        self.docs = []
-        self.chunks = []
-        self.index = None
-        
-    def load_pdf(self, file_path: str) -> str:
-        """Load a PDF file from the given path."""
-        if not os.path.exists(file_path):
-            return f"❌ File not found: {file_path}"
-        
-        loader = PyPDFLoader(file_path)
-        self.docs = loader.load()
-        return f"✅ Loaded {len(self.docs)} pages from PDF."
-    
-    def chunk_documents(self, chunk_size: int = 500, chunk_overlap: int = 50) -> str:
-        """Split documents into chunks."""
-        if not self.docs:
-            return "❌ No documents loaded."
-        
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size, 
-            chunk_overlap=chunk_overlap
-        )
-        self.chunks = splitter.split_documents(self.docs)
-        
-        # Add metadata
-        for i, chunk in enumerate(self.chunks):
-            chunk.metadata["chunk_id"] = i
-            chunk.metadata["source"] = "nips2017"
-        
-        return f"✅ Chunked into {len(self.chunks)} pieces."
-    
-    def embed_to_pinecone(self) -> str:
-        """Embed chunks and store in Pinecone."""
-        if not self.chunks:
-            return "❌ No chunks to embed."
-        
-        try:
-            # Initialize Pinecone client
-            pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-            
-            # Use an embedding model that produces 1024 dimensions to match your Pinecone index
-            embeddings = HuggingFaceEmbeddings(
-                model_name="sentence-transformers/all-MiniLM-L6-v2",
-                model_kwargs={"device": "cpu"}
-            )
-            
-            # Check if index exists
-            if PINECONE_INDEX_NAME not in pc.list_indexes().names():
-                return f"❌ Index '{PINECONE_INDEX_NAME}' not found in Pinecone. Please create it first."
-            
-            # Connect to existing index
-            index = pc.Index(PINECONE_INDEX_NAME)
-            
-            # Store in Pinecone using LangChain
-            self.index = LangchainPinecone(
-                index=index,
-                embedding=embeddings,
-                text_key="text",
-                namespace=PINECONE_NAMESPACE
-            )
-            
-            # Add documents to the index
-            self.index.add_documents(self.chunks, namespace=PINECONE_NAMESPACE)
-            
-            return f"✅ Stored {len(self.chunks)} chunks into Pinecone index '{PINECONE_INDEX_NAME}' under namespace '{PINECONE_NAMESPACE}'."
-        
-        except Exception as e:
-            return f"❌ Error embedding to Pinecone: {str(e)}"
-    
-    def query(self, question: str) -> str:
-        """Query the system using Gemini."""
-        if not self.index:
-            return "❌ Index not found. Please embed data first."
-        
-        try:
-            # Retrieve relevant documents
-            retriever = self.index.as_retriever(
-                search_kwargs={"k": 3, "namespace": PINECONE_NAMESPACE}
-            )
-            docs = retriever.get_relevant_documents(question)
-            
-            if not docs:
-                return "⚠️ No relevant documents found."
-            
-            # Create context from retrieved documents
-            context = "\n\n".join([doc.page_content for doc in docs])
-            
-            # Create prompt for Gemini
-            prompt = f"""
-Use the following context to answer the question:
+# 🛠️ Tool: Load PDF
+# @tool
 
-{context}
+def load_pdf(file_path: str) -> str:
+    """Loads a PDF document from the given file path and stores it in memory."""
+    loader = PyPDFLoader(file_path)
+    docs = loader.load()
+    memory["docs"] = docs
+    return f"{len(docs)} pages loaded."
 
-Question: {question}
-Answer:"""
-            
-            # Generate response using Gemini
-            response = gemini_model.generate_content(prompt)
-            return response.text.strip()
-        
-        except Exception as e:
-            return f"❌ Error querying: {str(e)}"
+# 🛠️ Tool: Chunk Text
+# @tool
 
-# ==== Main Execution ====
-if __name__ == "__main__":
-    # Initialize RAG system
-    rag_system = SimpleRAGSystem()
-    
-    # File path
-    file_path = r"data\NIPS-2017-attention-is-all-you-need-Paper.pdf"
-    
-    # Step 1: Load PDF
-    print("\n📂 Loading PDF...")
-    result = rag_system.load_pdf(file_path)
-    print(result)
-    
-    # Step 2: Chunk documents
-    print("\n✂️ Chunking text...")
-    result = rag_system.chunk_documents()
-    print(result)
-    
-    # Step 3: Embed to Pinecone
-    print("\n🧠 Embedding into Pinecone...")
-    result = rag_system.embed_to_pinecone()
-    print(result)
-    
-    # Step 4: Query the system
-    print("\n❓ Asking a question...")
-    question = "What is the main idea of the document?"
-    answer = rag_system.query(question)
-    print(f"\n🧠 Gemini's Answer:\n{answer}")
-    
-    # Additional questions
-    print("\n❓ Follow-up questions...")
-    questions = [
-        "What is the transformer architecture?",
-        "What are the key components of the attention mechanism?",
-        "How does the model perform compared to previous approaches?"
-    ]
-    
-    for q in questions:
-        print(f"\n🔍 Question: {q}")
-        answer = rag_system.query(q)
-        print(f"📝 Answer: {answer}")
+def chunk_text(chunk_size: int = 500, chunk_overlap: int = 100) -> str:
+    """Chunks the loaded document into smaller segments."""
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    chunks = splitter.split_documents(memory["docs"])
+    memory["chunks"] = chunks
+    return f"Chunked into {len(chunks)} pieces."
+
+# 🛠️ Tool: Embed Chunks
+# @tool
+
+def embed_chunks() -> str:
+    """Embeds the document chunks using a sentence transformer model and stores in FAISS index."""
+    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    texts = [chunk.page_content for chunk in memory["chunks"]]
+    embeddings = model.encode(texts)
+    index = faiss.IndexFlatL2(embeddings.shape[1])
+    index.add(np.array(embeddings))
+    memory["texts"] = texts
+    memory["index"] = index
+    memory["embed_model"] = model
+    return f"Embedded {len(texts)} chunks and stored in FAISS."
+
+# 🛠️ Tool: Query Chunks
+# @tool
+
+def query_chunks(query: str, top_k: int = 3) -> str:
+    """Finds the top relevant document chunks for the given query."""
+    model = memory["embed_model"]
+    index = memory["index"]
+    texts = memory["texts"]
+    query_vec = model.encode([query])
+    distances, indices = index.search(np.array(query_vec), top_k)
+    results = [texts[i] for i in indices[0]]
+    context = "\n".join(results)
+    memory["context"] = context
+    return context
+
+# 🛠️ Tool: Answer Question with Gemini
+# @tool
+
+def answer_question(question: str) -> str:
+    """Uses Gemini to answer a question based on retrieved context."""
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    context = memory.get("context", "")
+    # Efficient, focused prompt
+    prompt = (
+        "You are a helpful assistant. Answer the user's question using ONLY the provided context. "
+        "If the answer is not in the context, say 'I don't know based on the document.'\n"
+        f"Context:\n{context}\n\nQuestion: {question}\nAnswer: "
+    )
+    response = model.generate_content(prompt)
+    return response.text
+
+# 🌐 Streamlit UI
+st.set_page_config(page_title="Gemini RAG Q&A (Tool Calling)", layout="centered")
+st.title("🔧 Gemini RAG - Tool Calling Q&A on PDF")
+
+# 📄 Upload PDF
+uploaded_file = st.file_uploader("Upload a PDF document", type=["pdf"])
+if uploaded_file is not None:
+    file_path = os.path.join("temp.pdf")
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.read())
+
+    # Process PDF (call tools directly)
+    st.success(load_pdf(file_path))
+    st.info(chunk_text())
+    st.info(embed_chunks())
+
+    # --- Chat Interface ---
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    st.markdown("---")
+    st.header("💬 Chat with your document")
+
+    for chat in st.session_state.chat_history:
+        st.chat_message(chat["role"]).write(chat["content"])
+
+    user_input = st.chat_input("Ask a question about the document...")
+    if user_input:
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        st.chat_message("user").write(user_input)
+        st.info("🔍 Retrieving context...")
+        context = query_chunks(user_input)
+        st.session_state.chat_history.append({"role": "assistant", "content": "(Context retrieved)"})
+        st.chat_message("assistant").write("(Context retrieved)")
+        st.success("💬 Answering with Gemini...")
+        answer = answer_question(user_input)
+        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+        st.chat_message("assistant").write(answer)

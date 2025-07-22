@@ -1,6 +1,6 @@
 # 🤖 Gemini RAG PDF Q&A (Tool Calling)
 
-![App Screenshot](assets/demo.png)
+![App Screenshot](assets/image.png)
 
 A **Retrieval-Augmented Generation (RAG)** application using **Google's Gemini** model to answer questions from uploaded PDFs. Built with **LangChain Tools**, **FAISS**, **SentenceTransformers**, and **Streamlit**, this project showcases a full RAG pipeline integrated with Gemini via tool-calling style.
 
